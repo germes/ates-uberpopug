@@ -1,0 +1,112 @@
+version: '3.8'
+services:
+#
+#Service AUTH
+
+  auth_db:
+    container_name: auth_db
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: auth_secret
+      MYSQL_DATABASE: auth_db
+      MYSQL_USER: auth_user
+      MYSQL_PASSWORD: auth_pass
+    ports:
+      - '4306:3306'
+    volumes:
+      - ./.docker/database/init-auth.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./.docker/database/auth_db_data:/var/lib/mysql
+    networks:
+      - auth-network
+
+  auth_php:
+    container_name: auth_php
+    build:
+      context: .
+      dockerfile: ./.docker/php/dockerfile
+    ports:
+      - '9011:9000'
+    depends_on:
+      - auth_db
+    environment:
+      - XDEBUG_CONFIG="remote_host=host.docker.internal remote_enable=1"
+      - PHP_IDE_CONFIG="serverName=Docker"
+    volumes:
+      - ./auth:/var/www/auth
+    networks:
+      - auth-network
+
+  auth_nginx:
+    container_name: auth_nginx
+    image: nginx:stable-alpine
+    ports:
+      - '3000:80'
+    volumes:
+      - ./auth:/var/www/auth
+      - ./.docker/nginx/log/auth/:/var/log/nginx/
+      - ./.docker/nginx/conf.d/auth.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - auth_php
+      - auth_db
+    networks:
+       - auth-network
+
+#Service TASK
+  
+  task_db:
+    container_name: task_db
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: task_secret
+      MYSQL_DATABASE: task_db
+      MYSQL_USER: task_user
+      MYSQL_PASSWORD: task_pass
+    ports:
+      - '4307:3306'
+    volumes:
+      - ./.docker/database/init-task.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./.docker/database/task_db_data:/var/lib/mysql
+    networks:
+      - task-network
+
+  task_php:
+    container_name: task_php
+    build:
+      context: .
+      dockerfile: ./.docker/php/dockerfile
+    ports:
+      - '9022:9000'
+    depends_on:
+      - task_db
+    environment:
+      - XDEBUG_CONFIG="remote_host=host.docker.internal remote_enable=1"
+      - PHP_IDE_CONFIG="serverName=Docker"
+    volumes:
+      - ./task:/var/www/task
+    networks:
+      - task-network
+
+  task_nginx:
+    container_name: task_nginx
+    image: nginx:stable-alpine
+    ports:
+      - '2300:80'
+    volumes:
+      - ./task:/var/www/task
+      - ./.docker/nginx/log/task/:/var/log/nginx/
+      - ./.docker/nginx/conf.d/task.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - task_php
+      - task_db
+    networks:
+      - task-network
+
+networks:
+  auth-network:
+    name: auth-network
+  task-network:
+    name: task-network
